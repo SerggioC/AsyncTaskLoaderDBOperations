@@ -19,6 +19,7 @@ package com.example.android.todolist.data;
 import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
+import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
@@ -302,8 +303,37 @@ public class TaskContentProvider extends ContentProvider {
 
     @Override
     public int update(@NonNull Uri uri, ContentValues values, String selection, String[] selectionArgs) {
+        // Get access to the database and write URI matching code to recognize a single item
+        final SQLiteDatabase db = mTaskDbHelper.getWritableDatabase();
 
-        throw new UnsupportedOperationException("Not yet implemented");
+        int match = sUriMatcher.match(uri);
+        // Keep track of the number of deleted tasks
+        int tasksUpdated; // starts as 0
+        String id = uri.getPathSegments().get(1);
+
+        // Write the code to update a single row of data
+        // [Hint] Use selections to update an item by its row ID
+        switch (match) {
+            // Handle the single item case, recognized by the ID included in the URI path
+            case TASK_WITH_ID:
+                // Get the task ID from the URI path
+                // Use selections/selectionArgs to filter for this ID
+                tasksUpdated = db.update(TABLE_NAME, values, "_id=?", new String[]{id});
+                break;
+            default:
+                throw new UnsupportedOperationException("Unknown uri: " + uri);
+        }
+
+        // Notify the resolver of a change and return the number of items deleted
+        if (tasksUpdated > 0) {
+            // A task was updated, set notification
+            getContext().getContentResolver().notifyChange(uri, null);
+            Log.d("Sergio>", this + " deleted item with id=" + id + "\n" +
+                    "uri= " + uri);
+        }
+
+        // Return the number of tasks updated
+        return tasksUpdated;
     }
 
 
