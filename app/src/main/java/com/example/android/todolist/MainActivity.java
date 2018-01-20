@@ -16,22 +16,42 @@
 
 package com.example.android.todolist;
 
+import android.content.AsyncQueryHandler;
+import android.content.ContentProviderOperation;
+import android.content.ContentProviderResult;
+import android.content.ContentResolver;
+import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
+import android.content.OperationApplicationException;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
+import android.os.RemoteException;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.AsyncTaskLoader;
 import android.support.v4.content.Loader;
+import android.support.v4.os.OperationCanceledException;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
 import android.util.Log;
 import android.view.View;
+import android.widget.TextView;
 
 import com.example.android.todolist.data.TaskContract;
+
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 
 import static com.example.android.todolist.AddTaskActivity.ADDED_NEW_TASK_BOOLEAN;
 
@@ -40,18 +60,21 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
     // Constants for logging and referring to a unique loader
     private static final String TAG = MainActivity.class.getSimpleName();
     private static final int TASK_LOADER_ID = 0;
+    private static final int DELETE_LISTENER_ID = 1;
+    private static final int QUERY_LOADER_TOKEN = 1;
     RecyclerView mRecyclerView;
     int requestCode_id = 1;
-    // Member variables for the adapter and RecyclerView
     private CustomCursorAdapter mAdapter;
+    private Cursor mCursor;
+    private Context mContext;
 
+
+    @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        // Set the RecyclerView to its corresponding view
-        mRecyclerView = (RecyclerView) findViewById(R.id.recyclerViewTasks);
+        mRecyclerView = findViewById(R.id.recyclerViewTasks);
 
         // Set the layout for the RecyclerView to be a linear layout, which measures and
         // positions items within a RecyclerView into a linear list
@@ -60,6 +83,7 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         // Initialize the adapter and attach it to the RecyclerView
         mAdapter = new CustomCursorAdapter(this);
         mRecyclerView.setAdapter(mAdapter);
+        mContext = getBaseContext();
 
         /*
          Add a touch helper to the RecyclerView to recognize when a user swipes to delete an item.
@@ -75,7 +99,6 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
             // Called when a user swipes left or right on a ViewHolder
             @Override
             public void onSwiped(RecyclerView.ViewHolder viewHolder, int swipeDir) {
-                // Here is where you'll implement swipe to delete
 
                 // COMPLETED (1) Construct the URI for the item to delete
                 //[Hint] Use getTag (from the adapter code) to get the id of the swiped item
@@ -84,21 +107,60 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
 
                 // Build appropriate uri with String row id appended
                 String stringId = Integer.toString(id);
-                Uri uri = TaskContract.TaskEntry.CONTENT_URI;
-                uri = uri.buildUpon().appendPath(stringId).build();
+                Uri uri = TaskContract.TaskEntry.CONTENT_URI.buildUpon().appendPath(stringId).build();
 
-                // COMPLETED (2) Delete a single row of data using a ContentResolver
-                getContentResolver().delete(uri, null, null);
+                AsyncTaskLoader<Integer> deleteAsyncTaskLoader = new DeleteLoader(mContext, uri);
+//                AsyncTaskLoader<Integer> deleteAsyncTaskLoader = new AsyncTaskLoader<Integer>(mContext) {
+//
+//                    @Override
+//                    public Integer loadInBackground() {
+//                        Integer deleteResult = getContentResolver().delete(uri, null, null);
+//                        super.deliverResult(deleteResult);
+//                        return deleteResult;
+//                    }
+//
+//                    @Override
+//                    public void deliverResult(Integer data) {
+//                        super.deliverResult(data);
+//                    }
+//                };
+                Loader.OnLoadCompleteListener loadCompleteListener = new Loader.OnLoadCompleteListener() {
+                    /**
+                     * Called on the thread that created the Loader when the load is complete.
+                     *
+                     * @param loader the loader that completed the load
+                     * @param data   the result of the load
+                     */
+                    @Override
+                    public void onLoadComplete(Loader loader, Object data) {
+                        Log.w("Sergio>", this + " onLoadComplete\ndata= " + data);
+                        if (data != null) {
+                            if ((int) data != 0) {
+                                loader.startLoading();
+                                getSupportLoaderManager().restartLoader(TASK_LOADER_ID, null, MainActivity.this);
+                            } else {
+                                // complete condition
+                            }
+                        } else {
+                            // complete condition
+                        }
+                    }
+
+                };
+                deleteAsyncTaskLoader.registerListener(DELETE_LISTENER_ID, loadCompleteListener);
+                deleteAsyncTaskLoader.loadInBackground();
+
 
                 // COMPLETED (3) Restart the loader to re-query for all tasks after a deletion
                 //getSupportLoaderManager().restartLoader(TASK_LOADER_ID, null, MainActivity.this);
 
                 //mAdapter.notifyItemRemoved(viewHolder.getAdapterPosition());
-                getSupportLoaderManager().restartLoader(TASK_LOADER_ID, null, MainActivity.this);
+                //getSupportLoaderManager().restartLoader(TASK_LOADER_ID, null, MainActivity.this);
 
 
 //                mAdapter.notifyItemRangeChanged(viewHolder.getAdapterPosition(), mAdapter.getItemCount());
 //                mAdapter.notifyDataSetChanged();
+
 
             }
         }).attachToRecyclerView(mRecyclerView);
@@ -123,10 +185,21 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
          Ensure a loader is initialized and active. If the loader doesn't already exist, one is
          created, otherwise the last created loader is re-used.
          */
-        Log.i("Sergio>", this + " onCreate initLoader");
+        //Log.i("Sergio>", this + " onCreate initLoader");
         getSupportLoaderManager().initLoader(TASK_LOADER_ID, null, this);
-    }
 
+
+//        MyAsyncQueryHandler myAsyncQueryHandler = new MyAsyncQueryHandler(getContentResolver());
+//        myAsyncQueryHandler.startQuery(QUERY_LOADER_TOKEN,
+//                null,
+//                TaskContract.TaskEntry.CONTENT_URI,
+//                null,
+//                null,
+//                null,
+//                TaskContract.TaskEntry.COLUMN_PRIORITY);
+
+
+    }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -148,6 +221,8 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
      */
     @Override
     protected void onResume() {
+        TextView textView = new TextView(this);
+        textView.setError("wrre");
         super.onResume();
 
 
@@ -156,7 +231,6 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         //getSupportLoaderManager().restartLoader(TASK_LOADER_ID, null, this);
 
     }
-
 
     /**
      * Instantiates and returns a new AsyncTaskLoader with the given ID.
@@ -250,6 +324,325 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
     public void onLoaderReset(Loader<Cursor> loader) {
         Log.i("Sergio>", this + " onLoaderReset");
         mAdapter.swapCursor(null);
+    }
+
+    static class QueryLoader extends AsyncTaskLoader<Cursor> {
+        WeakReference weakContext;
+        Uri queryUri;
+        String[] projection;
+        String selection;
+        String[] selectionArgs;
+        String sortOrder;
+
+        public QueryLoader(@NonNull Context context, Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
+            super(context);
+            this.weakContext = new WeakReference(context);
+            this.queryUri = uri;
+            this.projection = projection;
+            this.selection = selection;
+            this.selectionArgs = selectionArgs;
+            this.sortOrder = sortOrder;
+        }
+
+        @Nullable
+        @Override
+        public Cursor loadInBackground() {
+            Cursor cursor = ((Context) weakContext.get()).getContentResolver().query(queryUri, projection, selection, selectionArgs, sortOrder);
+            super.deliverResult(cursor);
+            return cursor;
+        }
+
+    }
+
+    static class DeleteLoader extends AsyncTaskLoader<Integer> {
+        WeakReference weakContext;
+        Uri deleteUri;
+
+        public DeleteLoader(@NonNull Context context, Uri uri) {
+            super(context);
+            this.weakContext = new WeakReference(context);
+            this.deleteUri = uri;
+        }
+
+        /**
+         * Called on a worker thread to perform the actual load and to return
+         * the result of the load operation.
+         * <p>
+         * Implementations should not deliver the result directly, but should return them
+         * from this method, which will eventually end up calling {@link #deliverResult} on
+         * the UI thread.  If implementations need to process the results on the UI thread
+         * they may override {@link #deliverResult} and do so there.
+         * <
+         * To support cancellation, this method should periodically check the value of
+         * {@link #isLoadInBackgroundCanceled} and terminate when it returns true.
+         * Subclasses may also override {@link #cancelLoadInBackground} to interrupt the load
+         * directly instead of polling {@link #isLoadInBackgroundCanceled}.
+         * <
+         * When the load is canceled, this method may either return normally or throw
+         * {@link OperationCanceledException}.  In either case, the {@link Loader} will
+         * call {@link #onCanceled} to perform post-cancellation cleanup and to dispose of the
+         * result object, if any.
+         *
+         * @return The result of the load operation.
+         * @throws OperationCanceledException if the load is canceled during execution.
+         * @see #isLoadInBackgroundCanceled
+         * @see #cancelLoadInBackground
+         * @see #onCanceled
+         */
+        @Nullable
+        @Override
+        public Integer loadInBackground() {
+            Integer deleteResult = ((Context) weakContext.get()).getContentResolver().delete(deleteUri, null, null);
+            super.deliverResult(deleteResult);
+            return deleteResult;
+        }
+
+    }
+
+    static class InsertLoader extends AsyncTaskLoader<Uri> {
+        WeakReference weakContext;
+        Uri insertUri;
+        ContentValues contentValues;
+
+        public InsertLoader(@NonNull Context context, Uri uri, ContentValues contentValues) {
+            super(context);
+            this.weakContext = new WeakReference(context);
+            this.insertUri = uri;
+            this.contentValues = contentValues;
+        }
+
+        @Nullable
+        @Override
+        public Uri loadInBackground() {
+            Uri returnUri = ((Context) weakContext.get()).getContentResolver().insert(insertUri, contentValues);
+            super.deliverResult(returnUri);
+            return returnUri;
+        }
+
+    }
+    static class UpdateLoader extends AsyncTaskLoader<Integer> {
+        WeakReference weakContext;
+        Uri updateUri;
+        ContentValues contentValues;
+        String where;
+        String[] selectionArgs;
+
+        public UpdateLoader(@NonNull Context context, Uri uri, ContentValues contentValues, String where, String[] selectionArgs) {
+            super(context);
+            this.weakContext = new WeakReference(context);
+            this.updateUri = uri;
+            this.contentValues = contentValues;
+            this.where = where;
+            this.selectionArgs = selectionArgs;
+        }
+
+        @Nullable
+        @Override
+        public Integer loadInBackground() {
+            int returnUri = ((Context) weakContext.get()).getContentResolver().update(updateUri, contentValues, where, selectionArgs);
+            super.deliverResult(returnUri);
+            return returnUri;
+        }
+
+    }
+
+    static class applyBatchLoader extends AsyncTaskLoader<ContentProviderResult[]> {
+        WeakReference weakContext;
+        Uri applyBatchUri;
+        ContentValues[] contentValuesArray;
+
+        public applyBatchLoader(@NonNull Context context, Uri uri, ContentValues[] contentValuesArray) {
+            super(context);
+            this.weakContext = new WeakReference(context);
+            this.applyBatchUri = uri;
+            this.contentValuesArray = contentValuesArray;
+        }
+
+        @Nullable
+        @Override
+        public ContentProviderResult[] loadInBackground() {
+            ArrayList<ContentProviderOperation> operations = prepareOperations();
+
+            ContentProviderResult[] result = null;
+            try {
+                result = ((Context) weakContext.get()).getContentResolver().applyBatch(applyBatchUri.getAuthority(), operations);
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            } catch (OperationApplicationException e) {
+                e.printStackTrace();
+            }
+            super.deliverResult(result);
+            return result;
+        }
+
+        ArrayList<ContentProviderOperation> prepareOperations() {
+            int contentValueslength = contentValuesArray.length;
+            ArrayList<ContentProviderOperation> operationsExample = new ArrayList<>(contentValueslength);
+
+            //// Example batch of operations
+            //// One insert one update and one delete
+            //// Might want to receive the prepared operations in the Loader instead of ContentValuesArray
+            operationsExample.add(ContentProviderOperation.newInsert(applyBatchUri)
+                    .withValues(contentValuesArray[0])
+                    .withYieldAllowed(true)
+                    .build());
+
+            operationsExample.add(ContentProviderOperation.newUpdate(applyBatchUri)
+                    .withValues(contentValuesArray[1])
+                    .withYieldAllowed(true)
+                    .build());
+
+            operationsExample.add(ContentProviderOperation.newDelete(applyBatchUri)
+                    .withValues(contentValuesArray[2])
+                    .withYieldAllowed(true)
+                    .build());
+
+            return operationsExample;
+        }
+
+    }
+
+    static class BulkInsertLoader extends AsyncTaskLoader<Integer> {
+        WeakReference weakContext;
+        Uri insertUri;
+        ContentValues[] contentValuesArray;
+
+        public BulkInsertLoader(@NonNull Context context, Uri uri, ContentValues[] contentValuesArray) {
+            super(context);
+            this.weakContext = new WeakReference(context);
+            this.insertUri = uri;
+            this.contentValuesArray = contentValuesArray;
+        }
+
+        @Nullable
+        @Override
+        public Integer loadInBackground() {
+            Integer insertedValues = ((Context) weakContext.get()).getContentResolver().bulkInsert(insertUri, contentValuesArray);
+
+//            ContentProviderResult[] providerResult = null;
+//
+//            ArrayList<ContentProviderOperation> operations = new ArrayList<>();
+//            for (int i = 0; i < contentValuesArray.length; i++) {
+//                operations.add(ContentProviderOperation.newInsert(insertUri)
+//                        .withValues(contentValuesArray[i])
+//                        .withYieldAllowed(true)
+//                        .build());
+//            }
+//            try {
+//                providerResult = getContext().getContentResolver().applyBatch(insertUri.getAuthority(), operations);
+//            } catch (RemoteException e) {
+//                e.printStackTrace();
+//            } catch (OperationApplicationException e) {
+//                e.printStackTrace();
+//            }
+
+            super.deliverResult(insertedValues);
+            return insertedValues;
+        }
+    }
+
+
+
+    private class MyAsyncQueryHandler extends AsyncQueryHandler {
+
+
+        public MyAsyncQueryHandler(ContentResolver cr) {
+            super(cr);
+        }
+
+        @Override
+        protected Handler createHandler(Looper looper) {
+            return super.createHandler(looper);
+        }
+
+        /**
+         * This method begins an asynchronous query. When the query is done
+         * {@link #onQueryComplete} is called.
+         *
+         * @param token         A token passed into {@link #onQueryComplete} to identify
+         *                      the query.
+         * @param cookie        An object that gets passed into {@link #onQueryComplete}
+         * @param uri           The URI, using the content:// scheme, for the content to
+         *                      retrieve.
+         * @param projection    A list of which columns to return. Passing null will
+         *                      return all columns, which is discouraged to prevent reading data
+         *                      from storage that isn't going to be used.
+         * @param selection     A filter declaring which rows to return, formatted as an
+         *                      SQL WHERE clause (excluding the WHERE itself). Passing null will
+         *                      return all rows for the given URI.
+         * @param selectionArgs You may include ?s in selection, which will be
+         *                      replaced by the values from selectionArgs, in the order that they
+         *                      appear in the selection. The values will be bound as Strings.
+         * @param orderBy       How to order the rows, formatted as an SQL ORDER BY
+         *                      clause (excluding the ORDER BY itself). Passing null will use the
+         */
+        @Override
+        public void startQuery(int token, Object cookie, Uri uri, String[] projection, String selection, String[] selectionArgs, String orderBy) {
+            super.startQuery(token, cookie, uri, projection, selection, selectionArgs, orderBy);
+        }
+
+        /**
+         * Called when an asynchronous query is completed.
+         *
+         * @param token  the token to identify the query, passed in from
+         *               {@link #startQuery}.
+         * @param cookie the cookie object passed in from {@link #startQuery}.
+         * @param cursor The cursor holding the results from the query.
+         */
+        @Override
+        protected void onQueryComplete(int token, Object cookie, Cursor cursor) {
+            super.onQueryComplete(token, cookie, cursor);
+            mCursor = cursor;
+            mAdapter.swapCursor(cursor);
+        }
+
+        /**
+         * Called when an asynchronous insert is completed.
+         *
+         * @param token  the token to identify the query, passed in from
+         *               {@link #startInsert}.
+         * @param cookie the cookie object that's passed in from
+         *               {@link #startInsert}.
+         * @param uri    the uri returned from the insert operation.
+         */
+        @Override
+        protected void onInsertComplete(int token, Object cookie, Uri uri) {
+            super.onInsertComplete(token, cookie, uri);
+
+        }
+
+        /**
+         * Called when an asynchronous update is completed.
+         *
+         * @param token  the token to identify the query, passed in from
+         *               {@link #startUpdate}.
+         * @param cookie the cookie object that's passed in from
+         *               {@link #startUpdate}.
+         * @param result the result returned from the update operation
+         */
+        @Override
+        protected void onUpdateComplete(int token, Object cookie, int result) {
+            super.onUpdateComplete(token, cookie, result);
+        }
+
+        /**
+         * Called when an asynchronous delete is completed.
+         *
+         * @param token  the token to identify the query, passed in from
+         *               {@link #startDelete}.
+         * @param cookie the cookie object that's passed in from
+         *               {@link #startDelete}.
+         * @param result the result returned from the delete operation
+         */
+        @Override
+        protected void onDeleteComplete(int token, Object cookie, int result) {
+            super.onDeleteComplete(token, cookie, result);
+        }
+
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+        }
     }
 
 }

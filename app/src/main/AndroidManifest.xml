@@ -3,6 +3,10 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.example.android.todolist">
 
+    <uses-permission android:name="com.example.android.todolist.READ_ME"/>
+    <uses-permission android:name="com.example.android.todolist.WRITE_ME"/>
+
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -31,7 +35,9 @@
         <provider
             android:name="com.example.android.todolist.data.TaskContentProvider"
             android:authorities="com.example.android.todolist"
-            android:exported="false"/>
+            android:exported="true"
+            android:readPermission="com.example.android.todolist.READ_ME"
+            android:writePermission="com.example.android.todolist.WRITE_ME"/>
 
     </application>
 

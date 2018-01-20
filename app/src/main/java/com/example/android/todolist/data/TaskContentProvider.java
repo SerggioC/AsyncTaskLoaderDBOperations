@@ -17,15 +17,21 @@
 package com.example.android.todolist.data;
 
 import android.content.ContentProvider;
+import android.content.ContentProviderOperation;
+import android.content.ContentProviderResult;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.OperationApplicationException;
 import android.content.UriMatcher;
+import android.database.ContentObserver;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.support.annotation.NonNull;
 import android.util.Log;
+
+import java.util.ArrayList;
 
 import static com.example.android.todolist.data.TaskContract.TaskEntry.TABLE_NAME;
 
@@ -81,6 +87,105 @@ public class TaskContentProvider extends ContentProvider {
     }
 
 
+    /**
+     * Override this to handle requests to perform a batch of operations, or the
+     * default implementation will iterate over the operations and call
+     * {@link ContentProviderOperation#apply} on each of them.
+     * If all calls to {@link ContentProviderOperation#apply} succeed
+     * then a {@link ContentProviderResult} array with as many
+     * elements as there were operations will be returned.  If any of the calls
+     * fail, it is up to the implementation how many of the others take effect.
+     * This method can be called from multiple threads, as described in
+     * <a href="{@docRoot}guide/topics/fundamentals/processes-and-threads.html#Threads">Processes
+     * and Threads</a>.
+     *
+     * @param operations the operations to apply
+     * @return the results of the applications
+     * @throws OperationApplicationException thrown if any operation fails.
+     * @see ContentProviderOperation#apply
+     */
+    // Performs the work provided in a single transaction
+    @NonNull
+    @Override
+    public ContentProviderResult[] applyBatch(@NonNull ArrayList<ContentProviderOperation> operations) throws OperationApplicationException {
+        ContentProviderResult[] result = new ContentProviderResult[operations.size()];
+        // Opens the database object in "write" mode.
+        SQLiteDatabase db = mTaskDbHelper.getWritableDatabase();
+        // Begin a transaction
+        db.beginTransaction();
+        try {
+
+            for (int i = 0; i < operations.size(); i++) {
+                // Chain the result for back references
+                result[i] = operations.get(i).apply(this, result, i);
+            }
+
+            db.setTransactionSuccessful();
+        } catch (OperationApplicationException e) {
+            Log.d("Sergio", "batch failed: " + e.getLocalizedMessage());
+        } finally {
+            db.endTransaction();
+            Log.i("Sergio>", this + " applyBatch complete!");
+        }
+        return result;
+    }
+
+
+    /**
+     * Override this to handle requests to insert a set of new rows, or the
+     * default implementation will iterate over the values and call
+     * {@link #insert} on each of them.
+     * As a courtesy, call {@link ContentResolver#notifyChange(Uri, ContentObserver) notifyChange()}
+     * after inserting.
+     * This method can be called from multiple threads, as described in
+     * <a href="{@docRoot}guide/topics/fundamentals/processes-and-threads.html#Threads">Processes
+     * and Threads</a>.
+     *
+     * @param uri    The content:// URI of the insertion request.
+     * @param values An array of sets of column_name/value pairs to add to the database.
+     *               This must not be {@code null}.
+     * @return The number of values that were inserted.
+     */
+    @Override
+    public int bulkInsert(@NonNull Uri uri, @NonNull ContentValues[] values) {
+        final SQLiteDatabase db = mTaskDbHelper.getWritableDatabase();
+
+        switch (sUriMatcher.match(uri)) {
+            case TASKS:
+                db.beginTransaction();
+                int rowsInserted = 0;
+                try {
+                    int valuesLength = values.length;
+                    for (int i = 0; i < valuesLength; i++) {
+                        // Insert new values into the database Inserting values into tasks table
+                        long id = db.insert(TABLE_NAME, null, values[i]);
+                        if (id > 0) {
+                            rowsInserted++;
+                            Log.i("Sergio>", this + "\n" +
+                                    "inserted value " + i + " = " + values[i]);
+                        }
+                    }
+                    db.setTransactionSuccessful();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    db.endTransaction();
+                }
+
+                if (rowsInserted > 0) {
+                    // Notify the resolver if the uri has been changed, and return the newly inserted URI
+                    getContext().getContentResolver().notifyChange(uri, null);
+                }
+
+                return rowsInserted;
+
+            default:
+                return super.bulkInsert(uri, values);
+        }
+
+
+    }
+
     // Implement insert to handle requests to insert a single new row of data
     @Override
     public Uri insert(@NonNull Uri uri, ContentValues values) {
@@ -120,8 +225,7 @@ public class TaskContentProvider extends ContentProvider {
 
     // Implement query to handle requests for data by URI
     @Override
-    public Cursor query(@NonNull Uri uri, String[] projection, String selection,
-                        String[] selectionArgs, String sortOrder) {
+    public Cursor query(@NonNull Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
 
         // Get access to underlying database (read-only for query)
         final SQLiteDatabase db = mTaskDbHelper.getReadableDatabase();
@@ -189,7 +293,6 @@ public class TaskContentProvider extends ContentProvider {
             getContext().getContentResolver().notifyChange(uri, null);
             Log.d("Sergio>", this + " deleted item with id=" + id + "\n" +
                     "uri= " + uri);
-
         }
 
         // Return the number of tasks deleted
@@ -198,8 +301,7 @@ public class TaskContentProvider extends ContentProvider {
 
 
     @Override
-    public int update(@NonNull Uri uri, ContentValues values, String selection,
-                      String[] selectionArgs) {
+    public int update(@NonNull Uri uri, ContentValues values, String selection, String[] selectionArgs) {
 
         throw new UnsupportedOperationException("Not yet implemented");
     }
