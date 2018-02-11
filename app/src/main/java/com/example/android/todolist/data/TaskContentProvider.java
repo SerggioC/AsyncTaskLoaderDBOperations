@@ -340,7 +340,15 @@ public class TaskContentProvider extends ContentProvider {
     @Override
     public String getType(@NonNull Uri uri) {
 
-        throw new UnsupportedOperationException("Not yet implemented");
+        switch (sUriMatcher.match(uri)) {
+            case TASK_WITH_ID:
+                return ContentResolver.CURSOR_ITEM_BASE_TYPE;
+            case TASKS:
+                return ContentResolver.CURSOR_DIR_BASE_TYPE;
+            default:
+                return null;
+        }
+
     }
 
 }

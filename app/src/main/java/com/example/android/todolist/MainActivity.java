@@ -25,6 +25,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.OperationApplicationException;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -53,6 +57,7 @@ import com.example.android.todolist.data.TaskContract;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 
+import static android.graphics.Paint.ANTI_ALIAS_FLAG;
 import static com.example.android.todolist.AddTaskActivity.ADDED_NEW_TASK_BOOLEAN;
 
 
@@ -61,7 +66,8 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
     private static final String TAG = MainActivity.class.getSimpleName();
     private static final int TASK_LOADER_ID = 0;
     private static final int DELETE_LISTENER_ID = 1;
-    private static final int QUERY_LOADER_TOKEN = 1;
+    private static final int QUERY_LOADER_TOKEN = 10;
+    private static final int UPDATE_LOADER_TOKEN = 11;
     RecyclerView mRecyclerView;
     int requestCode_id = 1;
     private CustomCursorAdapter mAdapter;
@@ -170,9 +176,7 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
          Attach an OnClickListener to it, so that when it's clicked, a new intent will be created
          to launch the AddTaskActivity.
          */
-        FloatingActionButton fabButton = findViewById(R.id.fab);
-
-        fabButton.setOnClickListener(new View.OnClickListener() {
+        findViewById(R.id.fab).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 // Create a new intent to start an AddTaskActivity
@@ -180,6 +184,41 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
                 startActivityForResult(addTaskIntent, requestCode_id);
             }
         });
+
+        FloatingActionButton insert = findViewById(R.id.insert);
+        insert.setImageBitmap(getBitmapFromText("Query", 40, Color.GREEN));
+        insert.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                MyAsyncQueryHandler myAsyncQueryHandler = new MyAsyncQueryHandler(getContentResolver());
+                myAsyncQueryHandler.startQuery(QUERY_LOADER_TOKEN,
+                        null,
+                        TaskContract.TaskEntry.CONTENT_URI,
+                        null,
+                        null,
+                        null,
+                        TaskContract.TaskEntry.COLUMN_PRIORITY);
+            }
+        });
+
+        FloatingActionButton update = findViewById(R.id.update);
+        update.setImageBitmap(getBitmapFromText("Update", 40, Color.GREEN));
+        update.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                MyAsyncQueryHandler myAsyncQueryHandler = new MyAsyncQueryHandler(getContentResolver());
+                ContentValues contentvalues = new ContentValues(1);
+                contentvalues.put(TaskContract.TaskEntry.COLUMN_PRIORITY, "14");
+                myAsyncQueryHandler.startUpdate(UPDATE_LOADER_TOKEN,
+                        null,
+                        TaskContract.TaskEntry.CONTENT_URI.buildUpon().appendPath("14").build(),
+                        contentvalues,
+                        TaskContract.TaskEntry._ID,
+                        new String[]{"1"});
+
+            }
+        });
+
 
         /*
          Ensure a loader is initialized and active. If the loader doesn't already exist, one is
@@ -189,14 +228,7 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         getSupportLoaderManager().initLoader(TASK_LOADER_ID, null, this);
 
 
-//        MyAsyncQueryHandler myAsyncQueryHandler = new MyAsyncQueryHandler(getContentResolver());
-//        myAsyncQueryHandler.startQuery(QUERY_LOADER_TOKEN,
-//                null,
-//                TaskContract.TaskEntry.CONTENT_URI,
-//                null,
-//                null,
-//                null,
-//                TaskContract.TaskEntry.COLUMN_PRIORITY);
+
 
 
     }
@@ -420,6 +452,7 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         }
 
     }
+
     static class UpdateLoader extends AsyncTaskLoader<Integer> {
         WeakReference weakContext;
         Uri updateUri;
@@ -446,12 +479,12 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
 
     }
 
-    static class applyBatchLoader extends AsyncTaskLoader<ContentProviderResult[]> {
+    static class ApplyBatchLoader extends AsyncTaskLoader<ContentProviderResult[]> {
         WeakReference weakContext;
         Uri applyBatchUri;
         ContentValues[] contentValuesArray;
 
-        public applyBatchLoader(@NonNull Context context, Uri uri, ContentValues[] contentValuesArray) {
+        public ApplyBatchLoader(@NonNull Context context, Uri uri, ContentValues[] contentValuesArray) {
             super(context);
             this.weakContext = new WeakReference(context);
             this.applyBatchUri = uri;
@@ -544,16 +577,19 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
 
 
     private class MyAsyncQueryHandler extends AsyncQueryHandler {
-
+        ContentResolver contentResolver;
 
         public MyAsyncQueryHandler(ContentResolver cr) {
             super(cr);
+            this.contentResolver = cr;
         }
 
         @Override
         protected Handler createHandler(Looper looper) {
             return super.createHandler(looper);
         }
+
+
 
         /**
          * This method begins an asynchronous query. When the query is done
@@ -579,7 +615,9 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         @Override
         public void startQuery(int token, Object cookie, Uri uri, String[] projection, String selection, String[] selectionArgs, String orderBy) {
             super.startQuery(token, cookie, uri, projection, selection, selectionArgs, orderBy);
+            //contentResolver.query(uri, projection, selection, selectionArgs, orderBy);
         }
+
 
         /**
          * Called when an asynchronous query is completed.
@@ -645,5 +683,18 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         }
     }
 
+    public static Bitmap getBitmapFromText(String text, float textSize, int textColor) {
+        Paint paint = new Paint(ANTI_ALIAS_FLAG);
+        paint.setTextSize(textSize);
+        paint.setColor(textColor);
+        paint.setTextAlign(Paint.Align.LEFT);
+        float baseline = -paint.ascent(); // ascent() is negative
+        int width = (int) (paint.measureText(text) + 0.0f); // round
+        int height = (int) (baseline + paint.descent() + 0.0f);
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawText(text, 0, baseline, paint);
+        return bitmap;
+    }
 }
 

@@ -34,7 +34,7 @@ public class TaskContract {
     // The authority, which is how your code knows which Content Provider to access
     public static final String AUTHORITY = "com.example.android.todolist";
 
-    // The base content URI = "content://" + <authority>
+    // The base content URI = "content://" + <authority> , ContentResolver.SCHEME_CONTENT => "content"
     public static final Uri BASE_CONTENT_URI = Uri.parse("content://" + AUTHORITY);
 
     // Define the possible paths for accessing data in this contract
