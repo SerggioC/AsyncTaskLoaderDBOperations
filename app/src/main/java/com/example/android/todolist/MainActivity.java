@@ -16,6 +16,8 @@
 
 package com.example.android.todolist;
 
+import android.animation.Animator;
+import android.animation.ValueAnimator;
 import android.content.AsyncQueryHandler;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -39,6 +41,7 @@ import android.os.RemoteException;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
+import android.support.constraint.ConstraintLayout;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.AsyncTaskLoader;
@@ -50,6 +53,9 @@ import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
 import android.util.Log;
 import android.view.View;
+import android.view.animation.LinearInterpolator;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.example.android.todolist.data.TaskContract;
@@ -74,6 +80,19 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
     private Cursor mCursor;
     private Context mContext;
 
+    public static Bitmap getBitmapFromText(String text, float textSize, int textColor) {
+        Paint paint = new Paint(ANTI_ALIAS_FLAG);
+        paint.setTextSize(textSize);
+        paint.setColor(textColor);
+        paint.setTextAlign(Paint.Align.LEFT);
+        float baseline = -paint.ascent(); // ascent() is negative
+        int width = (int) (paint.measureText(text) + 0.0f); // round
+        int height = (int) (baseline + paint.descent() + 0.0f);
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawText(text, 0, baseline, paint);
+        return bitmap;
+    }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
@@ -90,6 +109,7 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         mAdapter = new CustomCursorAdapter(this);
         mRecyclerView.setAdapter(mAdapter);
         mContext = getBaseContext();
+
 
         /*
          Add a touch helper to the RecyclerView to recognize when a user swipes to delete an item.
@@ -171,22 +191,9 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
             }
         }).attachToRecyclerView(mRecyclerView);
 
-        /*
-         Set the Floating Action Button (FAB) to its corresponding View.
-         Attach an OnClickListener to it, so that when it's clicked, a new intent will be created
-         to launch the AddTaskActivity.
-         */
-        findViewById(R.id.fab).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                // Create a new intent to start an AddTaskActivity
-                Intent addTaskIntent = new Intent(MainActivity.this, AddTaskActivity.class);
-                startActivityForResult(addTaskIntent, requestCode_id);
-            }
-        });
 
         FloatingActionButton insert = findViewById(R.id.insert);
-        insert.setImageBitmap(getBitmapFromText("Query", 40, Color.GREEN));
+        insert.setImageBitmap(getBitmapFromText("Query", 50, Color.GREEN));
         insert.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -202,21 +209,18 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         });
 
         FloatingActionButton update = findViewById(R.id.update);
-        update.setImageBitmap(getBitmapFromText("Update", 40, Color.GREEN));
-        update.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                MyAsyncQueryHandler myAsyncQueryHandler = new MyAsyncQueryHandler(getContentResolver());
-                ContentValues contentvalues = new ContentValues(1);
-                contentvalues.put(TaskContract.TaskEntry.COLUMN_PRIORITY, "14");
-                myAsyncQueryHandler.startUpdate(UPDATE_LOADER_TOKEN,
-                        null,
-                        TaskContract.TaskEntry.CONTENT_URI.buildUpon().appendPath("14").build(),
-                        contentvalues,
-                        TaskContract.TaskEntry._ID,
-                        new String[]{"1"});
+        update.setImageBitmap(getBitmapFromText("Update", 50, Color.GREEN));
+        update.setOnClickListener(view -> {
+            MyAsyncQueryHandler myAsyncQueryHandler = new MyAsyncQueryHandler(getContentResolver());
+            ContentValues contentvalues = new ContentValues(1);
+            contentvalues.put(TaskContract.TaskEntry.COLUMN_PRIORITY, "14");
+            myAsyncQueryHandler.startUpdate(UPDATE_LOADER_TOKEN,
+                    null,
+                    TaskContract.TaskEntry.CONTENT_URI.buildUpon().appendPath("14").build(),
+                    contentvalues,
+                    TaskContract.TaskEntry._ID,
+                    new String[]{"1"});
 
-            }
         });
 
 
@@ -227,10 +231,126 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         //Log.i("Sergio>", this + " onCreate initLoader");
         getSupportLoaderManager().initLoader(TASK_LOADER_ID, null, this);
 
+        /*
+         Set the Floating Action Button (FAB) to its corresponding View.
+         Attach an OnClickListener to it, so that when it's clicked, a new intent will be created
+         to launch the AddTaskActivity.
+         */
+        FloatingActionButton add_new = findViewById(R.id.add_new);
+
+        FloatingActionButton query = findViewById(R.id.query);
+        query.setImageBitmap(getBitmapFromText("Query", 50, Color.GREEN));
+        FloatingActionButton delete = findViewById(R.id.delete);
+        delete.setImageBitmap(getBitmapFromText("Delete", 50, Color.GREEN));
 
 
+        add_new.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                FrameLayout frameLayout = findViewById(R.id.framelayout);
+                int frameWidth = frameLayout.getWidth();
+
+                int fabWidth = add_new.getWidth();
+                int space = (frameWidth - fabWidth * 5) / 6;
+                int i = 0;
+                int duration = 500;
+                animateThisView(add_new, fabWidth * i + space * ++i, duration).start();
+                animateThisView(insert, fabWidth * i + space * ++i, duration).start();
+                animateThisView(update, fabWidth * i + space * ++i, duration).start();
+                animateThisView(query, fabWidth * i + space * ++i, duration).start();
+                animateThisView(delete, fabWidth * i + space * ++i, duration).start();
+                // AWESOMENESS ABOVE! :)
+            }
+        });
 
 
+    }
+
+    private ValueAnimator animateThisView(View view, int finalValue, long duration /*milliseconds*/) {
+        ValueAnimator animator = ValueAnimator.ofInt(0, finalValue);
+        animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                Integer animatedValue = (Integer) animation.getAnimatedValue();
+                view.setTranslationX(animatedValue.longValue());
+//                ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
+//                layoutParams.width = animatedValue;
+//                view.requestLayout();
+            }
+        });
+        animator.addListener(new Animator.AnimatorListener() {
+
+            /**
+             * <p>Notifies the start of the animation.</p>
+             *
+             * @param animation The started animation.
+             */
+            @Override
+            public void onAnimationStart(Animator animation) {
+
+            }
+
+            /**
+             * <p>Notifies the end of the animation. This callback is not invoked
+             * for animations with repeat count set to INFINITE.</p>
+             *
+             * @param animation The animation which reached its end.
+             */
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (view.getId() == R.id.add_new) {
+                    view.setOnClickListener(null);
+                    view.setOnClickListener(view1 -> {
+                        // Create a new intent to start an AddTaskActivity
+                        Intent addTaskIntent = new Intent(MainActivity.this, AddTaskActivity.class);
+                        startActivityForResult(addTaskIntent, requestCode_id);
+                    });
+                }
+            }
+
+            /**
+             * <p>Notifies the cancellation of the animation. This callback is not invoked
+             * for animations with repeat count set to INFINITE.</p>
+             *
+             * @param animation The animation which was canceled.
+             */
+            @Override
+            public void onAnimationCancel(Animator animation) {
+
+            }
+
+            /**
+             * <p>Notifies the repetition of the animation.</p>
+             *
+             * @param animation The animation which was repeated.
+             */
+            @Override
+            public void onAnimationRepeat(Animator animation) {
+
+            }
+        });
+        animator.setDuration(duration);
+        animator.setInterpolator(new LinearInterpolator());
+        animator.setRepeatCount(0);
+        //animator.setRepeatMode(ValueAnimator.RESTART);
+
+        return animator;
+    }
+
+    private ValueAnimator animatePlanet(ImageView planet, long orbitDuration) {
+        ValueAnimator animator = ValueAnimator.ofInt(0, 359);
+        animator.addUpdateListener(valueAnimator -> {
+            int val = (Integer) valueAnimator.getAnimatedValue();
+            ConstraintLayout.LayoutParams layoutParams = (ConstraintLayout.LayoutParams) planet.getLayoutParams();
+            layoutParams.baselineToBaseline = val;
+            planet.setLayoutParams(layoutParams);
+        });
+        animator.setDuration(orbitDuration);
+        animator.setInterpolator(new LinearInterpolator());
+        animator.setRepeatMode(ValueAnimator.RESTART);
+        animator.setRepeatCount(ValueAnimator.INFINITE);
+
+        return animator;
     }
 
     @Override
@@ -574,8 +694,6 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         }
     }
 
-
-
     private class MyAsyncQueryHandler extends AsyncQueryHandler {
         ContentResolver contentResolver;
 
@@ -588,7 +706,6 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         protected Handler createHandler(Looper looper) {
             return super.createHandler(looper);
         }
-
 
 
         /**
@@ -681,20 +798,6 @@ public class MainActivity extends AppCompatActivity implements LoaderManager.Loa
         public void handleMessage(Message msg) {
             super.handleMessage(msg);
         }
-    }
-
-    public static Bitmap getBitmapFromText(String text, float textSize, int textColor) {
-        Paint paint = new Paint(ANTI_ALIAS_FLAG);
-        paint.setTextSize(textSize);
-        paint.setColor(textColor);
-        paint.setTextAlign(Paint.Align.LEFT);
-        float baseline = -paint.ascent(); // ascent() is negative
-        int width = (int) (paint.measureText(text) + 0.0f); // round
-        int height = (int) (baseline + paint.descent() + 0.0f);
-        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        canvas.drawText(text, 0, baseline, paint);
-        return bitmap;
     }
 }
 

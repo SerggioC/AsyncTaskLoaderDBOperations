@@ -4,9 +4,9 @@
     and a floating action button that launches another activity.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent">
+             xmlns:app="http://schemas.android.com/apk/res-auto"
+             android:layout_width="match_parent"
+             android:layout_height="match_parent">
 
     <!-- RecyclerView that is responsible for holding a list of task data -->
     <android.support.v7.widget.RecyclerView
@@ -15,73 +15,50 @@
         android:layout_height="match_parent"
         android:paddingBottom="8dp"/>
 
-    <LinearLayout
-        android:layout_height="wrap_content"
+    <FrameLayout
+        android:id="@+id/framelayout"
         android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:layout_gravity="bottom">
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" >
-        </Space>
+
         <android.support.design.widget.FloatingActionButton
             android:id="@+id/insert"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:srcCompat="@android:drawable/arrow_up_float"
-            android:tint="@android:color/holo_green_dark"/>
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" >
-        </Space>
+            android:tint="@android:color/holo_green_dark"
+            app:srcCompat="@android:drawable/arrow_up_float"/>
+
         <android.support.design.widget.FloatingActionButton
             android:id="@+id/update"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:srcCompat="@android:drawable/arrow_up_float"
-            android:tint="@android:color/holo_orange_light"/>
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" >
-        </Space>
+            android:layout_marginLeft="0dp"
+            android:tint="@android:color/holo_orange_light"
+            app:srcCompat="@android:drawable/arrow_up_float"/>
+
         <android.support.design.widget.FloatingActionButton
             android:id="@+id/query"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:srcCompat="@android:drawable/arrow_up_float"
-            android:tint="@android:color/holo_blue_bright"/>
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" >
-        </Space>
+            android:tint="@android:color/holo_blue_bright"
+            app:srcCompat="@android:drawable/arrow_up_float"/>
+
         <android.support.design.widget.FloatingActionButton
             android:id="@+id/delete"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:srcCompat="@android:drawable/arrow_up_float"
-            android:tint="@android:color/holo_red_dark"/>
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" >
-        </Space>
+            android:tint="@android:color/holo_red_dark"
+            app:srcCompat="@android:drawable/arrow_up_float"/>
+
         <!-- Floating action button that launches AddTaskActivity when clicked -->
         <android.support.design.widget.FloatingActionButton
-            android:id="@+id/fab"
+            android:id="@+id/add_new"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:srcCompat="@android:drawable/ic_input_add"
-            android:tint="@android:color/white"/>
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" >
-        </Space>
+            android:tint="@android:color/white"
+            app:srcCompat="@android:drawable/ic_input_add"/>
 
-    </LinearLayout>
+    </FrameLayout>
 
 </FrameLayout>
 
